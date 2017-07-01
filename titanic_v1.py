@@ -1,5 +1,9 @@
 #### Importing Required Libraries
 import os
+
+import warnings
+warnings.filterwarnings("ignore")
+
 import numpy as np
 import pandas as pd
 
@@ -9,6 +13,10 @@ from sklearn.preprocessing import OneHotEncoder
 
 from sklearn import ensemble
 from sklearn import model_selection
+
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
 
 #### --------------------------------------------------------------------- ####
 #### --------------------------------------------------------------------- ####
@@ -46,18 +54,34 @@ def fill_missing_age(missing_age_train, missing_age_test):
 
     missing_age_X_test = missing_age_test.drop(['Age'], axis = 1)
     
-    gbm_reg = ensemble.GradientBoostingRegressor()
+    gbm_reg = ensemble.GradientBoostingRegressor(random_state = 42)
     
-    gbm_reg_param_grid = {'n_estimators': [1000], 'max_depth': [3], 'learning_rate': [0.1]}
+    gbm_reg_param_grid = {'n_estimators': [5000], 'max_depth': [3], 'learning_rate': [0.1], 'max_features': [3]}
     gbm_reg_grid = model_selection.GridSearchCV(gbm_reg, gbm_reg_param_grid, cv = 10, n_jobs = 10, verbose = 0)
     gbm_reg_grid.fit(missing_age_X_train, missing_age_y_train)
     gbm_reg_grid.best_score_
-    print("Avg CV Score for 'Age' Feature Regressor: " + str(gbm_reg_grid.score(missing_age_X_train, missing_age_y_train)))
+    print("Age feature Best Params: " + str(gbm_reg_grid.best_params_))
+    print("CV Score for 'Age' Feature Regressor: " + str(gbm_reg_grid.score(missing_age_X_train, missing_age_y_train)))
     
     missing_age_test['Age'] = gbm_reg_grid.predict(missing_age_X_test)
     
     return missing_age_test
 
+#### Function to pick top 'N' features
+def top_n_features(df_X, df_y, top_n):
+    rf_est = RandomForestClassifier(random_state = 42)
+
+    rf_param_grid = {'n_estimators' : [500], 'min_samples_split':[3], 'max_depth':[15], 'criterion':['gini'], 'max_features': [50]}
+    rf_grid = model_selection.GridSearchCV(rf_est, rf_param_grid, n_jobs = 15, cv = 10)
+    rf_grid.fit(df_X, df_y)
+    rf_grid.best_score_
+    print("Top N Features Best Params: " + str(rf_grid.best_params_))
+    print("Top N Features RF Score: " + str(rf_grid.score(df_X, df_y)))
+
+    feature_imp_sorted = pd.DataFrame({'feature': list(df_X), 'importance': rf_grid.best_estimator_.feature_importances_}).sort_values('importance', ascending = False)
+    features_top_n = feature_imp_sorted.head(top_n)['feature']
+    
+    return features_top_n
 
 #### --------------------------------------------------------------------- ####
 #### --------------------------------------------------------------------- ####
@@ -86,7 +110,7 @@ test_data_orig.head()
 #### More info of Test data - Analyze the data in each feature
 
 #### Combine Train and Test data to fill missing values
-
+test_data_orig['Survived'] = 0
 combined_train_test = train_data_orig.append(test_data_orig)
 combined_train_test.shape
 combined_train_test.info()
@@ -107,6 +131,7 @@ pclass_dummies_df = pd.get_dummies(combined_train_test['Pclass'],
                                    prefix = combined_train_test[['Pclass']].columns[0])
 combined_train_test = pd.concat([combined_train_test, pclass_dummies_df], axis = 1)
 
+#### Embarked
 #### Fill basic missing values for 'Embarked' feature and convert it in to dummy variable
 #### Fill missing Embarked values with Mode
 if (combined_train_test['Embarked'].isnull().sum() != 0):
@@ -118,11 +143,13 @@ emb_dummies_df = pd.get_dummies(combined_train_test['Embarked'],
                                 prefix = combined_train_test[['Embarked']].columns[0])
 combined_train_test = pd.concat([combined_train_test, emb_dummies_df], axis = 1)
 
+#### Sex
 #### Convert feature variable 'Sex' into dummy variable
 lb_sex = preprocessing.LabelBinarizer()
 lb_sex.fit(np.array(['male', 'female']))
 combined_train_test['Sex'] = lb_sex.transform(combined_train_test['Sex'])
 
+#### Name
 #### Extract Titles from Name feature and create a new column
 combined_train_test['Title'] = combined_train_test['Name'].str.extract('.+,(.+)').str.extract('^(.+?)\.').str.strip()
 titles_uniq = combined_train_test['Title'].unique()
@@ -187,16 +214,80 @@ combined_train_test['Age'] = new_df.values
 combined_train_test.shape
 combined_train_test.info()
 
+#### Ticket
+combined_train_test = pd.get_dummies(combined_train_test, columns = ['Ticket'])
+combined_train_test.shape
+
+#### Cabin
+combined_train_test = pd.get_dummies(combined_train_test, columns = ['Cabin'])
+combined_train_test.shape
+
+#### Title
+combined_train_test = pd.get_dummies(combined_train_test, columns = ['Title'])
+combined_train_test.shape
+combined_train_test.info()
+
+#### Drop columns that are not required
+combined_train_test.drop(['Name', 'Pclass', 'PassengerId', 'Embarked'], axis = 1, inplace = True)
+
+#### Divide the Train and Test data
+train_data = combined_train_test[:891]
+test_data = combined_train_test[891:]
+
+titanic_train_data_X = train_data.drop(['Survived'], axis = 1)
+titanic_train_data_y = train_data['Survived']
+
+titanic_test_data_X = test_data.drop(['Survived'], axis = 1)
+
+#### Use Feature Importance to drop features that may not add value
+features_to_pick = 100
+features_top_n = top_n_features(titanic_train_data_X, titanic_train_data_y, features_to_pick)
+
+titanic_train_data_X = titanic_train_data_X[features_top_n]
+titanic_train_data_X.shape
+titanic_train_data_X.info()
+
+titanic_test_data_X = titanic_test_data_X[features_top_n]
+titanic_test_data_X.shape
+titanic_test_data_X.info()
+
+#### --------------------------------------------------------------------- ####
+
+#### --------------------------------------------------------------------- ####
+
+#### Build the models
+rf_est = ensemble.RandomForestClassifier(random_state = 42)
+gbm_est = ensemble.GradientBoostingClassifier(random_state = 42)
+ada_est = ensemble.AdaBoostClassifier(random_state = 42)
+bag_est = ensemble.BaggingClassifier(random_state = 42)
+et_est = ensemble.ExtraTreesClassifier(random_state = 42)
+
+voting_est = ensemble.VotingClassifier(estimators = [('rf', rf_est),('gbm', gbm_est),('ada', ada_est),('bag', bag_est),('et', et_est)],
+                                       voting = 'hard',
+                                       n_jobs = 15)
+voting_params_grid = {'rf__n_estimators': [500], 'rf__samples_split': [4], 'rf__max_depth': [10],'rf__max_features':[80], 'rf__n_jobs':[10],
+                      'gbm__n_estimators': [500], 'gbm__learning_rate': [0.085], 'gbm__max_depth': [5], 'gbm__max_features':[50],
+                      'ada__n_estimators': [500], 'ada__learning_rate': [1], 
+                      'bag__n_estimators': [700], 'bag__max_samples':[150], 'bag__max_features': [50], 'bag__n_jobs':[10],
+                      'et__n_estimators':[500], 'et__max_depth':[10], 'et__max_features':[50], 'et__n_jobs':[10]}
+
+voting_grid = model_selection.GridSearchCV(voting_est, voting_params_grid, cv = 10, n_jobs = 10)
+voting_grid.fit(titanic_train_data_X, titanic_train_data_y)
+voting_grid.best_score_
+print("Voting Grid Best Params: " + str(voting_grid.best_params_))
+print("Voting Grid CV Score: " + str(voting_grid.score(titanic_train_data_X, titanic_train_data_y)))
 
 #### --------------------------------------------------------------------- ####
 #### --------------------------------------------------------------------- ####
 
+#### Predict the output
+titanic_test_data_X['Survived'] = voting_grid.predict(titanic_test_data_X)
 
 
-#### --------------------------------------------------------------------- ####
-#### --------------------------------------------------------------------- ####
-
-
+#### Prepare submission file
+submission = pd.DataFrame({'PassengerId': test_data_orig.loc[:, 'PassengerId'],
+                           'Survived': titanic_test_data_X.loc[:, 'Survived']})
+submission.to_csv("M:\\Data Science\\Kaggle\\Titanic\\submission.csv", index = False)
 
 #### --------------------------------------------------------------------- ####
 #### --------------------------------------------------------------------- ####
