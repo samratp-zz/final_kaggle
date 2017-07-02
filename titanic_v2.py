@@ -42,7 +42,7 @@ def fare_category(fare):
     else:
         return 'Very_High_Fare'
 
-#### Create a Family Size Category
+#### Create a Family Size category
 def family_size_category(family_size):
     if (family_size <= 1):
         return 'Single'
@@ -51,6 +51,23 @@ def family_size_category(family_size):
     else:
         return 'Large_Family'
         
+#### Create Age Group category
+def age_group_cat(age):
+    if (age <= 2):
+        return 'Toddler'
+    elif(age <= 12):
+        return 'Child'
+    elif (age <= 19):
+        return 'Teenager'
+    elif (age <= 25):
+        return 'Young_Adult'
+    elif (age <= 40):
+        return 'Adult'
+    elif (age <= 60):
+        return 'Middle_Aged'
+    else:
+        return 'Senior_Citizen'
+            
 #### Function to fill missing 'Age' values
 def fill_missing_age(missing_age_train, missing_age_test):
     missing_age_X_train = missing_age_train.drop(['Age'], axis = 1)
@@ -178,6 +195,11 @@ if (combined_train_test['Fare'].isnull().sum() != 0):
     combined_train_test['Fare'].fillna(combined_train_test['Fare'].mean(), inplace=True)
     combined_train_test.info()
 
+#### Divide Fare for those sharing the same Ticket
+combined_train_test['Group_Ticket'] = combined_train_test['Fare'].groupby(by = combined_train_test['Ticket']).transform('count')
+combined_train_test['Fare'] = combined_train_test['Fare']/combined_train_test['Group_Ticket']
+combined_train_test.drop(['Group_Ticket'], axis = 1, inplace = True)
+
 combined_train_test['Fare'].describe()
 
 #### Create a new Fare_Category category variable from Fare feature
@@ -203,8 +225,8 @@ combined_train_test.info()
 #### Print the average age based on their Title before filling the missing values
 print(combined_train_test['Age'].groupby(by = combined_train_test['Title']).mean().sort_values(ascending = True))
 
-missing_age_df = pd.DataFrame(combined_train_test[['PassengerId', 'Age', 'Parch', 'Sex', 'SibSp', 'Family_Size', 'Family_Size_Category', 'Title']])
-missing_age_df = pd.get_dummies(missing_age_df, columns = ['Title'])
+missing_age_df = pd.DataFrame(combined_train_test[['PassengerId', 'Age', 'Parch', 'Sex', 'SibSp', 'Family_Size', 'Family_Size_Category', 'Title', 'Pclass']])
+missing_age_df = pd.get_dummies(missing_age_df, columns = ['Title', 'Pclass'])
 missing_age_df.shape
 missing_age_df.info()
 
@@ -225,6 +247,12 @@ if (sum(n < 0 for n in combined_train_test.Age.values.flatten()) > 0):
 
 #### Print the average age based on their Title after filling the missing values
 print(combined_train_test['Age'].groupby(by = combined_train_test['Title']).mean().sort_values(ascending = True))
+
+#### Create a new Age_Category category variable from Age feature
+combined_train_test['Age_Category'] = combined_train_test['Age'].map(age_group_cat)
+le_age = LabelEncoder()
+le_age.fit(np.array(['Toddler', 'Child', 'Teenager', 'Young_Adult', 'Adult', 'Middle_Aged', 'Senior_Citizen']))
+combined_train_test['Age_Category'] = le_age.transform(combined_train_test['Age_Category'])
 
 combined_train_test.shape
 combined_train_test.info()
@@ -282,7 +310,7 @@ voting_est = ensemble.VotingClassifier(estimators = [('rf', rf_est),('gbm', gbm_
                                        n_jobs = 15)
 voting_params_grid = {'rf__n_estimators': [500], 'rf__min_samples_split': [4], 'rf__max_depth': [10],'rf__max_features':[80], 'rf__n_jobs':[10], 'rf__verbose':[1],
                       'gbm__n_estimators': [500], 'gbm__learning_rate': [0.085], 'gbm__max_depth': [5], 'gbm__max_features':[50], 'gbm__verbose':[1],
-                      'ada__n_estimators': [500], 'ada__learning_rate': [1], 'ada__verbose':[1], 
+                      'ada__n_estimators': [500], 'ada__learning_rate': [1],
                       'bag__n_estimators': [700], 'bag__max_samples':[150], 'bag__max_features': [50], 'bag__n_jobs':[10], 'bag__verbose':[1],
                       'et__n_estimators':[500], 'et__max_depth':[10], 'et__max_features':[50], 'et__n_jobs':[10], 'et__verbose':[1]}
 
