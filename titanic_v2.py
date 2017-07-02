@@ -280,11 +280,11 @@ et_est = ensemble.ExtraTreesClassifier(random_state = 42)
 voting_est = ensemble.VotingClassifier(estimators = [('rf', rf_est),('gbm', gbm_est),('ada', ada_est),('bag', bag_est),('et', et_est)],
                                        voting = 'hard',
                                        n_jobs = 15)
-voting_params_grid = {'rf__n_estimators': [500], 'rf__min_samples_split': [4], 'rf__max_depth': [10],'rf__max_features':[80], 'rf__n_jobs':[10],
-                      'gbm__n_estimators': [500], 'gbm__learning_rate': [0.085], 'gbm__max_depth': [5], 'gbm__max_features':[50],
-                      'ada__n_estimators': [500], 'ada__learning_rate': [1], 
-                      'bag__n_estimators': [700], 'bag__max_samples':[150], 'bag__max_features': [50], 'bag__n_jobs':[10],
-                      'et__n_estimators':[500], 'et__max_depth':[10], 'et__max_features':[50], 'et__n_jobs':[10]}
+voting_params_grid = {'rf__n_estimators': [500], 'rf__min_samples_split': [4], 'rf__max_depth': [10],'rf__max_features':[80], 'rf__n_jobs':[10], 'rf__verbose':[1],
+                      'gbm__n_estimators': [500], 'gbm__learning_rate': [0.085], 'gbm__max_depth': [5], 'gbm__max_features':[50], 'gbm__verbose':[1],
+                      'ada__n_estimators': [500], 'ada__learning_rate': [1], 'ada__verbose':[1], 
+                      'bag__n_estimators': [700], 'bag__max_samples':[150], 'bag__max_features': [50], 'bag__n_jobs':[10], 'bag__verbose':[1],
+                      'et__n_estimators':[500], 'et__max_depth':[10], 'et__max_features':[50], 'et__n_jobs':[10], 'et__verbose':[1]}
 
 voting_grid = model_selection.GridSearchCV(voting_est, voting_params_grid, cv = 10, n_jobs = 10)
 voting_grid.fit(titanic_train_data_X, titanic_train_data_y)
