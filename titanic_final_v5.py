@@ -77,7 +77,7 @@ def fill_missing_age(missing_age_train, missing_age_test):
     missing_age_X_test = missing_age_test.drop(['Age'], axis = 1)
     
     gbm_reg = ensemble.GradientBoostingRegressor(random_state = 42)
-    gbm_reg_param_grid = {'n_estimators': [5000], 'max_depth': [3], 'learning_rate': [0.1], 'max_features': [3]}
+    gbm_reg_param_grid = {'n_estimators': [2000, 5000], 'max_depth': [2], 'learning_rate': [0.05, 0.1], 'max_features': [2]}
     gbm_reg_grid = model_selection.GridSearchCV(gbm_reg, gbm_reg_param_grid, cv = 15, n_jobs = 15, verbose = 1)
     gbm_reg_grid.fit(missing_age_X_train, missing_age_y_train)
     
@@ -92,7 +92,7 @@ def fill_missing_age(missing_age_train, missing_age_test):
 #### Function to pick top 'N' features
 def top_n_features(df_X, df_y, top_n):
     rf_est = RandomForestClassifier(random_state = 42)
-    rf_param_grid = {'n_estimators' : [500], 'min_samples_split':[3], 'max_depth':[20], 'criterion':['entropy'], 'max_features': [60]}
+    rf_param_grid = {'n_estimators' : [500, 600], 'min_samples_split':[2], 'max_depth':[15], 'max_features': [60]}
     rf_grid = model_selection.GridSearchCV(rf_est, rf_param_grid, n_jobs = 15, cv = 15, verbose = 1)
     rf_grid.fit(df_X, df_y)
     
@@ -233,6 +233,12 @@ le_fare = LabelEncoder()
 le_fare.fit(np.array(['Zero_Fare', 'Very_Low_Fare', 'Low_Fare', 'Med_Fare', 'High_Fare', 'Very_High_Fare']))
 combined_train_test['Fare_Category'] = le_fare.transform(combined_train_test['Fare_Category'])
 
+fare_cat_dummies_df = pd.get_dummies(combined_train_test['Fare_Category'],
+                                prefix = combined_train_test[['Fare_Category']].columns[0])
+combined_train_test = pd.concat([combined_train_test, fare_cat_dummies_df], axis = 1)
+
+print(combined_train_test['Fare_Category'].groupby(by = combined_train_test['Fare_Category']).count().sort_values(ascending = False))
+
 ####
 #### Parch and SibSp
 combined_train_test['Family_Size'] = combined_train_test['Parch'] + combined_train_test['SibSp'] + 1
@@ -259,8 +265,8 @@ combined_train_test.info()
 #### Print the average age based on their Title before filling the missing values
 print(combined_train_test['Age'].groupby(by = combined_train_test['Title']).mean().sort_values(ascending = True))
 
-missing_age_df = pd.DataFrame(combined_train_test[['PassengerId', 'Age', 'Parch', 'Sex', 'SibSp', 'Family_Size', 'Family_Size_Category', 'Title', 'Fare', 'Fare_Category']])
-missing_age_df = pd.get_dummies(missing_age_df, columns = ['Title', 'Family_Size_Category', 'Fare_Category'])
+missing_age_df = pd.DataFrame(combined_train_test[['PassengerId', 'Age', 'Parch', 'Sex', 'SibSp', 'Family_Size', 'Family_Size_Category', 'Title', 'Fare', 'Fare_Category', 'Pclass', 'Embarked']])
+missing_age_df = pd.get_dummies(missing_age_df, columns = ['Title', 'Family_Size_Category', 'Fare_Category', 'Sex', 'Pclass', 'Embarked'])
 missing_age_df.shape
 missing_age_df.info()
 
@@ -318,7 +324,7 @@ titanic_train_data_y = train_data['Survived']
 titanic_test_data_X = test_data.drop(['Survived'], axis = 1)
 
 #### Use Feature Importance to drop features that may not add value
-features_to_pick = 1000
+features_to_pick = 1200
 features_top_n = top_n_features(titanic_train_data_X, titanic_train_data_y, features_to_pick)
 
 titanic_train_data_X = titanic_train_data_X[features_top_n]
@@ -334,16 +340,17 @@ titanic_test_data_X.info()
 #### --------------------------------------------------------------------- ####
 
 #### Build the models
-rf_est = ensemble.RandomForestClassifier(n_estimators = 2500, min_samples_split = 4, max_depth =  6, n_jobs = 10, random_state = 42)
-gbm_est = ensemble.GradientBoostingClassifier(n_estimators = 2500, learning_rate = 0.1, max_depth = 5,  random_state = 42)
+rf_est = ensemble.RandomForestClassifier(n_estimators = 2500, min_samples_split = 4, max_depth =  6, n_jobs = 10, random_state = 42, verbose = 1)
+gbm_est = ensemble.GradientBoostingClassifier(n_estimators = 2500, learning_rate = 0.1, max_depth = 5,  random_state = 42, verbose = 1)
 ada_est = ensemble.AdaBoostClassifier(n_estimators = 2500, learning_rate = 1, random_state = 42)
-bag_est = ensemble.BaggingClassifier(n_estimators = 2500, max_samples = 150,  n_jobs = 10, random_state = 42)
-et_est = ensemble.ExtraTreesClassifier(n_estimators = 2500, max_depth = 10,  n_jobs = 10, random_state = 42)
+bag_est = ensemble.BaggingClassifier(n_estimators = 2500, max_samples = 150,  n_jobs = 10, random_state = 42, verbose = 1)
+et_est = ensemble.ExtraTreesClassifier(n_estimators = 2500, max_depth = 10,  n_jobs = 10, random_state = 42, verbose = 1)
 
 xgb_est = XGBClassifier(n_estimators = 1000, max_depth = 2, eta = 0.05, n_jobs = 10, random_state = 42)
 
 voting_est = ensemble.VotingClassifier(estimators = [('rf', rf_est),('gbm', gbm_est),('ada', ada_est),('bag', bag_est),('et', et_est), ('xgb', xgb_est)],
                                        voting = 'soft',
+                                       weights=[2,3,2,1,2,3],
                                        n_jobs = 15)
 
 voting_est.fit(titanic_train_data_X, titanic_train_data_y)
