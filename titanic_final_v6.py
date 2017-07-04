@@ -1,4 +1,4 @@
-#### Importing Required Libraries
+### Importing Required Libraries
 import os
 
 import warnings
@@ -19,6 +19,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 
 from xgboost import XGBClassifier
+
 #### --------------------------------------------------------------------- ####
 #### --------------------------------------------------------------------- ####
 
@@ -45,7 +46,7 @@ def fare_category(fare):
 def family_size_category(family_size):
     if (family_size <= 1):
         return 'Single'
-    elif (family_size <= 3):
+    elif (family_size <= 4):
         return 'Small_Family'
     else:
         return 'Large_Family'
@@ -73,9 +74,9 @@ def fill_missing_age(missing_age_train, missing_age_test):
     missing_age_y_train = missing_age_train['Age']
     missing_age_X_test = missing_age_test.drop(['Age'], axis = 1)
     
-    gbm_reg = ensemble.GradientBoostingRegressor(random_state = 42)
-    gbm_reg_param_grid = {'n_estimators': [2000], 'max_depth': [2, 3], 'learning_rate': [0.05], 'max_features': [2]}
-    gbm_reg_grid = model_selection.GridSearchCV(gbm_reg, gbm_reg_param_grid, cv = 10, n_jobs = 10, verbose = 1, scoring = 'r2')
+    gbm_reg = ensemble.GradientBoostingRegressor(random_state = 2017)
+    gbm_reg_param_grid = {'n_estimators': [2000, 5000], 'max_depth': [2], 'learning_rate': [0.05, 0.1], 'max_features': [2]}
+    gbm_reg_grid = model_selection.GridSearchCV(gbm_reg, gbm_reg_param_grid, cv = 15, n_jobs = 15, verbose = 1)
     gbm_reg_grid.fit(missing_age_X_train, missing_age_y_train)
     
     print("Age feature Best Params: " + str(gbm_reg_grid.best_params_))
@@ -140,8 +141,8 @@ def get_top_n_features(titanic_train_data_X, titanic_train_data_y, top_n_feature
 
 #### Read the Train and Test Data
 
-train_data_orig = pd.read_csv('train.csv')
-test_data_orig = pd.read_csv('test.csv')
+train_data_orig = pd.read_csv('../input/train.csv')
+test_data_orig = pd.read_csv('../input/test.csv')
 
 #### Basic info of Train data
 
@@ -263,6 +264,10 @@ le_fare = LabelEncoder()
 le_fare.fit(np.array(['Zero_Fare', 'Very_Low_Fare', 'Low_Fare', 'Med_Fare', 'High_Fare', 'Very_High_Fare']))
 combined_train_test['Fare_Category'] = le_fare.transform(combined_train_test['Fare_Category'])
 
+fare_cat_dummies_df = pd.get_dummies(combined_train_test['Fare_Category'],
+                                prefix = combined_train_test[['Fare_Category']].columns[0])
+combined_train_test = pd.concat([combined_train_test, fare_cat_dummies_df], axis = 1)
+
 print(combined_train_test['Fare_Category'].groupby(by = combined_train_test['Fare_Category']).count().sort_values(ascending = False))
 
 ####
@@ -291,8 +296,8 @@ combined_train_test.info()
 #### Print the average age based on their Title before filling the missing values
 print(combined_train_test['Age'].groupby(by = combined_train_test['Title']).mean().sort_values(ascending = True))
 
-missing_age_df = pd.DataFrame(combined_train_test[['PassengerId', 'Age', 'Parch', 'Sex', 'SibSp', 'Family_Size', 'Family_Size_Category', 'Title', 'Fare', 'Fare_Category', 'Pclass']])
-missing_age_df = pd.get_dummies(missing_age_df, columns = ['Title', 'Family_Size_Category', 'Fare_Category', 'Sex', 'Pclass'])
+missing_age_df = pd.DataFrame(combined_train_test[['PassengerId', 'Age', 'Parch', 'Sex', 'SibSp', 'Family_Size', 'Family_Size_Category', 'Title', 'Fare', 'Fare_Category', 'Pclass', 'Embarked']])
+missing_age_df = pd.get_dummies(missing_age_df, columns = ['Title', 'Family_Size_Category', 'Fare_Category', 'Sex', 'Pclass', 'Embarked'])
 missing_age_df.shape
 missing_age_df.info()
 
@@ -350,8 +355,8 @@ titanic_train_data_y = train_data['Survived']
 titanic_test_data_X = test_data.drop(['Survived'], axis = 1)
 
 #### Use Feature Importance to drop features that may not add value
-top_n_features = 300
-features_top_n = get_top_n_features(titanic_train_data_X, titanic_train_data_y, top_n_features)
+features_to_pick = 300
+features_top_n = get_top_n_features(titanic_train_data_X, titanic_train_data_y, features_to_pick)
 
 titanic_train_data_X = titanic_train_data_X[features_top_n]
 titanic_train_data_X.shape
@@ -366,41 +371,32 @@ titanic_test_data_X.info()
 #### --------------------------------------------------------------------- ####
 
 #### Build the models
-rf_est = ensemble.RandomForestClassifier(random_state = 42)
-gbm_est = ensemble.GradientBoostingClassifier(random_state = 42)
-ada_est = ensemble.AdaBoostClassifier(random_state = 42)
-bag_est = ensemble.BaggingClassifier(random_state = 42)
-et_est = ensemble.ExtraTreesClassifier(random_state = 42)
+rf_est = ensemble.RandomForestClassifier(n_estimators = 2500, min_samples_split = 4, max_depth =  6, n_jobs = 10, random_state = 2017, verbose = 1)
+gbm_est = ensemble.GradientBoostingClassifier(n_estimators = 2500, learning_rate = 0.1, max_depth = 5,  random_state = 2017, verbose = 1)
+ada_est = ensemble.AdaBoostClassifier(n_estimators = 2500, learning_rate = 1, random_state = 2017)
+bag_est = ensemble.BaggingClassifier(n_estimators = 2500, max_samples = 150,  n_jobs = 10, random_state = 2017, verbose = 1)
+et_est = ensemble.ExtraTreesClassifier(n_estimators = 2500, max_depth = 10,  n_jobs = 10, random_state = 2017, verbose = 1)
 
-xgb_est = XGBClassifier()
+xgb_est = XGBClassifier(n_estimators = 1000, max_depth = 2, eta = 0.05, n_jobs = 10, random_state = 2017)
 
 voting_est = ensemble.VotingClassifier(estimators = [('rf', rf_est),('gbm', gbm_est),('ada', ada_est),('bag', bag_est),('et', et_est), ('xgb', xgb_est)],
                                        voting = 'soft',
                                        n_jobs = 15)
-voting_params_grid = {'rf__n_estimators': [500], 'rf__min_samples_split': [4], 'rf__max_depth': [10],'rf__max_features':[80], 'rf__n_jobs':[10], 'rf__verbose':[1],
-                      'gbm__n_estimators': [500], 'gbm__learning_rate': [0.085], 'gbm__max_depth': [5], 'gbm__max_features':[50], 'gbm__verbose':[1],
-                      'ada__n_estimators': [500], 'ada__learning_rate': [1],
-                      'bag__n_estimators': [700], 'bag__max_samples':[150], 'bag__max_features': [50], 'bag__n_jobs':[10], 'bag__verbose':[1],
-                      'et__n_estimators':[500], 'et__max_depth':[10], 'et__max_features':[50], 'et__n_jobs':[10], 'et__verbose':[1],
-                      'xgb__n_estimators': [1000], 'xgb__learning_rate':[0.05], 'xgb__max_depth': [2], 'xgb__min_child_weight':[2]}
 
-voting_grid = model_selection.GridSearchCV(voting_est, voting_params_grid, cv = 10, n_jobs = 10, verbose = 1)
-voting_grid.fit(titanic_train_data_X, titanic_train_data_y)
-voting_grid.best_score_
-print("Voting Grid Best Params: " + str(voting_grid.best_params_))
-print("Voting Grid CV Score: " + str(voting_grid.score(titanic_train_data_X, titanic_train_data_y)))
+voting_est.fit(titanic_train_data_X, titanic_train_data_y)
+print("VotingClassifier Score: " + str(voting_est.score(titanic_train_data_X, titanic_train_data_y)))
 
 #### --------------------------------------------------------------------- ####
 #### --------------------------------------------------------------------- ####
 
 #### Predict the output
-titanic_test_data_X['Survived'] = voting_grid.predict(titanic_test_data_X)
+titanic_test_data_X['Survived'] = voting_est.predict(titanic_test_data_X)
 
 
 #### Prepare submission file
 submission = pd.DataFrame({'PassengerId': test_data_orig.loc[:, 'PassengerId'],
                            'Survived': titanic_test_data_X.loc[:, 'Survived']})
-submission.to_csv("M:\\Data Science\\Kaggle\\Titanic\\submission.csv", index = False)
+submission.to_csv("../working/submission.csv", index = False)
 
 #### --------------------------------------------------------------------- ####
 #### --------------------------------------------------------------------- ####
