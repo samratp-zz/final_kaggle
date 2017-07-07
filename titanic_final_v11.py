@@ -319,11 +319,19 @@ first_name_dummies_df = pd.get_dummies(combined_train_test['First_Name'],
 combined_train_test = pd.concat([combined_train_test, first_name_dummies_df], axis = 1)
 
 #### Last_Name
-combined_train_test['Last_Name'] = combined_train_test['Name'].str.split(".").str[1]
+combined_train_test['Last_Name'] = combined_train_test['Name'].str.split("\.(.*?)\(").str[1].str.strip()
 print(combined_train_test['Last_Name'].groupby(by = combined_train_test['Last_Name']).count().sort_values(ascending = False)[:5])
 
 last_name_dummies_df = pd.get_dummies(combined_train_test['Last_Name'],
                                 prefix = combined_train_test[['Last_Name']].columns[0])
+combined_train_test = pd.concat([combined_train_test, last_name_dummies_df], axis = 1)
+
+#### Original_Name
+combined_train_test['Original_Name'] = combined_train_test['Name'].str.split("\((.*?)\)").str[1].str.strip("\"").str.strip()
+print(combined_train_test['Original_Name'].groupby(by = combined_train_test['Original_Name']).count().sort_values(ascending = False)[:5])
+
+last_name_dummies_df = pd.get_dummies(combined_train_test['Original_Name'],
+                                prefix = combined_train_test[['Original_Name']].columns[0])
 combined_train_test = pd.concat([combined_train_test, last_name_dummies_df], axis = 1)
 
 ####
